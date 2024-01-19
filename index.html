@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" charset="utf-8">
+    <meta name="author" content="Carlos Pineda Guerrero, octubre 2023">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src='/api/Get?nombre=/WSClient.js'></script>
+    <script>
+        var URL = "/api";
+
+        var foto = null;  // por default la foto es nula
+        function get(id) {
+            return document.getElementById(id);
+        }
+        function muestra(id) {
+            get(id).style.display = "block";
+        }
+
+        function oculta(id) {
+            get(id).style.display = "none";
+        }
+        function muestra_pantalla(id) {
+            oculta("menu");
+            muestra(id);
+        }
+        function oculta_pantalla(id) {
+            oculta(id);
+            muestra("menu");
+        }
+        function readSingleFile(files, imagen) {
+            var file = files[0];
+            if (!file) return;
+            var reader = new FileReader();
+            reader.onload = function (e) {
+                imagen.src = reader.result;
+                // reader.result incluye al principio: "data:image/jpeg;base64,"
+                foto = reader.result.split(',')[1];
+            };
+            reader.readAsDataURL(file);
+        }
+        function limpia_alta() {
+            get("alta_descripcion").value = "";
+            get("alta_cantidad").value = "";
+            get("alta_precio").value = "";
+            get("alta_imagen").src = "/api/Get?nombre=/producto-sin-imagen.jpg";
+            foto = null;
+        }
+        function alta() {
+            var cliente = new WSClient(URL);
+            var articulo =
+            {
+                descripcion: get("alta_descripcion").value,
+                cantidad: get("alta_cantidad").value,
+                precio: get("alta_precio").value,
+                foto: foto
+            };
+            cliente.postJson("alta_articulo",
+                {
+                    articulo: articulo
+
+                },
+                function (code, result) {
+
+                    if (code == 200) {
+                        Swal.fire('Éxito', 'Operación realizada con éxito', 'success');
+                    } else {
+                        Swal.fire('Error', JSON.stringify(result), 'error');
+                    }
+                });
+        }
+
+        function cierra_pantalla_consulta() {
+            oculta_pantalla('consulta_articulo');
+            muestra("encabezado_consulta");
+            muestra("boton_consulta");
+            oculta("encabezado_modifica");
+            oculta("modifica_articulo");
+            get("consulta_descripcion").readOnly = false;
+        }
+        function cierra_pantalla_consulta_carrito() {
+            oculta_pantalla('consulta_carrito');
+            /*muestra("encabezado_consulta");
+            muestra("boton_consulta");*/
+            oculta("encabezado_modifica");
+            oculta("modifica_articulo");
+            get("consulta_descripcion").readOnly = false;
+        }
+        function quita_foto() {
+            foto = null;
+            get('consulta_imagen').src = '/api/Get?nombre=/producto-sin-imagen.jpg';
+            get('consulta_file').value = '';
+        }
+        function accionEspecifica(boton, index) {
+            var valorInput = get('inputAccion' + index).value;
+            var descripcion = boton.getAttribute('data-descripcion');
+            var id_art = boton.getAttribute('data-id');
+            añadir_articulo(descripcion, valorInput, id_art, 1);
+        }
+        function accionEspecifica2(boton, index) {
+            var valorInput = boton.getAttribute('data-cantidad');
+            var descripcion = boton.getAttribute('data-descripcion');
+            var id_art = boton.getAttribute('data-id');
+            console.log(valorInput, id_art, descripcion)
+            añadir_articulo(descripcion, valorInput, id_art, 2);
+        }
+        function eliminarEspecifica(boton, index) {
+            var valorInput = get('inputAccion' + index).value;
+            var descripcion = boton.getAttribute('data-descripcion');
+            var id_art = boton.getAttribute('data-id');
+            console.log("Vamos a eliminar:", id_art, descripcion)
+            borra_carrito_articulo(descripcion, valorInput, id_art, 2);
+        }
+
+        function añadir_articulo(descrip_articulo, cantidad, id, op) {
+            var cliente = new WSClient(URL);
+            var articulo =
+            {
+                id_articulo: id,
+                descripcion: descrip_articulo,
+                cantidad: cantidad,
+            };
+            cliente.postJson("ingresa_articulo",
+                {
+                    articulo: articulo
+
+                },
+                function (code, result) {
+
+                    if (code == 200) {
+                        if (JSON.stringify(result).includes("eliminó")) {
+                            Swal.fire('Aviso', JSON.stringify(result), 'info');
+                        } else {
+                            if (cantidad < 0) {
+                                Swal.fire('Aviso', "Se quitó una pieza del articulo " + descrip_articulo + " con ID: " + id, 'info');
+                            } else {
+                                if (cantidad == 1) {
+                                    Swal.fire('Éxito', "Se agregó una pieza del articulo " + descrip_articulo + " con ID: " + id, 'success');
+
+                                } else {
+                                    Swal.fire('Éxito', "Se agregaron " + cantidad + " piezas del articulo " + descrip_articulo + " con ID: " + id, 'success');
+                                }
+                            }
+                        }
+                        if (op == 1)
+                            consulta()
+                        else
+                            consulta_carrito()
+                    }
+
+                    else
+                        Swal.fire('Error', JSON.stringify(result), 'error');
+                });
+
+
+        }
+        function borra_carrito_articulo(descrip_articulo, cantidad, id, op) {
+            Swal.fire({
+                title: '¿Estás seguro?',
+                text: "¿Quieres eliminar el artículo " + descrip_articulo + " con ID " + id + " del carrito ?",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Sí, eliminar',
+                cancelButtonText: 'No, cancelar',
+                reverseButtons: true
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    // Usuario confirmó, proceder con la operación de borrado
+                    var cliente = new WSClient(URL);
+                    var articulo = {
+                        id_articulo: id,
+                        descripcion: descrip_articulo,
+                        cantidad: cantidad
+                    };
+                    cliente.postJson("borra_de_carrito",
+                        {
+                            articulo: articulo
+                        },
+                        function (code, result) {
+                            if (code == 200) {
+                                // Manejar respuesta exitosa
+                                Swal.fire(
+                                    'Eliminado!',
+                                    'El artículo ha sido eliminado del carrito.',
+                                    'success'
+                                );
+                                if (op == 1)
+                                    consulta();
+                                else
+                                    consulta_carrito();
+                            } else {
+                                // Manejar errores
+                                Swal.fire('Error', JSON.stringify(result), 'error');
+                            }
+                        });
+                } else if (result.dismiss === Swal.DismissReason.cancel) {
+                    // Usuario canceló la operación
+                    Swal.fire(
+                        'Cancelado',
+                        'La operación ha sido cancelada',
+                        'error'
+                    );
+                }
+            });
+        }
+        function eliminar_carrito_completo(arreglo_articulos) {
+            var cliente = new WSClient(URL);
+            cliente.postJson("borra_carrito",
+                {
+                    articulos: arreglo_articulos
+                }, function (code, result) {
+                    if (code == 200) {
+                        Swal.fire(
+                            'Eliminado!',
+                            'El carrito ha sido eliminado.',
+                            'success'
+                        );
+                        consulta_carrito();
+                        consulta();
+                        oculta_pantalla('consulta_carrito')
+                        muestra_pantalla('consulta_articulo');
+                    } else {
+                        // Manejar errores
+                        Swal.fire('Error', JSON.stringify(result), 'error');
+                    }
+                });
+        }
+        function elimina_carrito(descrip_articulo, cantidad, id, op) {
+            Swal.fire({
+                title: '¿Estás seguro?',
+                text: "¿Desea eliminar todos los articulos de su carrito?",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Sí, eliminar',
+                cancelButtonText: 'No, cancelar',
+                reverseButtons: true
+            }).then((result) => {
+                if (result.isConfirmed) {
+
+                    // Usuario confirmó, proceder con la operación de borrado
+                    var cliente = new WSClient(URL);
+                    consulta_aux()
+                        .then(result => {
+                            if (result === -1) {
+                                console.log("No hay resultados en el carrito");
+                            } else {
+                                eliminar_carrito_completo(result)
+                            }
+                        })
+                    //var articulo = articulos;
+                    /**/
+                } else if (result.dismiss === Swal.DismissReason.cancel) {
+                    // Usuario canceló la operación
+                    Swal.fire(
+                        'Cancelado',
+                        'La operación ha sido cancelada',
+                        'error'
+                    );
+                }
+            });
+        }
+        function consulta() {
+            var cliente = new WSClient(URL);
+            cliente.postJson("consulta_articulo",
+                {
+                    descripcion: get("consulta_descripcion").value
+                },
+                function (code, result) {
+                    if (code == 200) {
+                        creaTablaArticulos(result, 'resultados_consulta', 0);
+                    } else {
+                        Swal.fire('Error', JSON.stringify(result), 'error');
+                    }
+                });
+        }
+        function consulta_aux() {
+            return new Promise((resolve, reject) => {
+                var cliente = new WSClient(URL);
+                cliente.postJson("consulta_carrito",
+                    {
+                        descripcion: ""
+                    },
+                    function (code, result) {
+                        if (code == 200) {
+                            resolve(result); // Resuelve la promesa con el resultado
+                        } else {
+                            reject(-1); // Rechaza la promesa con -1
+                        }
+                    }
+                );
+            });
+        }
+        function creaTablaArticulos(articulos, id, op) {
+            var tabla = '<table>';
+            tablaStr = '<tr><th>Foto</th><th style="width:50px">Descripción</th>';
+            if (op == 1) {
+                tabla += tablaStr;
+                tabla += '<th style="width:50px">Precio</th><th style="width:100px">Cantidad</th>'
+                tabla += '<th>Eliminar</th></tr >'
+                articulos.forEach(function (articulo, index) {
+                    tabla += '<tr>';
+                    tabla += '<td><img src="' + (articulo.foto ? 'data:image/jpeg;base64,' + articulo.foto : '/api/Get?nombre=/producto-sin-imagen.jpg') + '" width="80" height="80" style="object-fit: cover;"/></td>';
+                    tabla += '<td>' + articulo.descripcion + '</td>';
+                    tabla += '<td> $' + articulo.precio + '.00</td>';
+                    tabla += '<td style="width:100px">';
+                    tabla += '<button onclick="accionEspecifica2(this, ' + index + ')" data-descripcion="' + articulo.descripcion + '" data-id="' + articulo.id_articulo + '" data-cantidad="-1">-</button>';
+                    tabla += '<input class="inp" type="text" value="' + articulo.cantidad + '" id="inputAccion' + index + '" style="width:15px;"/>';
+                    tabla += '<button onclick="accionEspecifica2(this, ' + index + ')" data-descripcion="' + articulo.descripcion + '" data-id="' + articulo.id_articulo + '" data-cantidad="1">+</button>';
+                    tabla += '</td>';
+                    tabla += '<td >';
+                    tabla += '<button onclick="eliminarEspecifica(this, ' + index + ')" data-descripcion="' + articulo.descripcion + '" data-id="' + articulo.id_articulo + '">Eliminar</button>';
+                    tabla += '</td>';
+                    tabla += '</tr>';
+                });
+            }
+            if (op == 0) {
+                tabla += tablaStr;
+                tabla += '<th style="width:50px">Cantidad</th><th style="width:50px">Precio</th>'
+                tabla += '<th>Comprar</th></tr >'
+                tabla += '></tr >'
+                articulos.forEach(function (articulo, index) {
+                    tabla += '<tr>';
+                    tabla += '<td><img src="' + (articulo.foto ? 'data:image/jpeg;base64,' + articulo.foto : '/api/Get?nombre=/producto-sin-imagen.jpg') + '" width="100" height="100" style="object-fit: cover;"/></td>';
+                    tabla += '<td>' + articulo.descripcion + '</td>';
+                    tabla += '<td>' + articulo.cantidad + '</td>';
+                    tabla += '<td> $' + articulo.precio + '.00</td>';
+                    tabla += '<td >';
+                    tabla += '<input class="inp" type="text" value="1" id="inputAccion' + index + '" style="width:20px;"/>';
+
+                    tabla += '<button onclick="accionEspecifica(this, ' + index + ')" data-descripcion="' + articulo.descripcion + '" data-id="' + articulo.id_articulo + '">+</button>';
+                    tabla += '</td>';
+                    tabla += '</tr>';
+                });
+            }
+
+            tabla += '</table>';
+            get(id).innerHTML = tabla;
+        }
+        function consulta_carrito() {
+            var cliente = new WSClient(URL);
+            cliente.postJson("consulta_carrito",
+                {
+                    descripcion: ""
+                },
+                function (code, result) {
+                    if (code == 200) {
+                        if (result && result.length > 0) {
+                            creaTablaArticulos(result, 'resultados_consulta_carrito', 1);
+                        } else {
+                            document.getElementById('resultados_consulta_carrito').innerHTML = "No hay artículos en el carrito";
+                        }
+                    } else {
+                        Swal.fire('Error', JSON.stringify(result), 'error');
+                    }
+                });
+        }
+        function cierra_pantalla_consulta2(pantallaSiguiente) {
+            oculta_pantalla('consulta_articulo');
+            oculta('menu')
+            muestra(pantallaSiguiente);
+        }
+        function modifica() {
+            var cliente = new WSClient(URL);
+            var articulo =
+            {
+                descripcion: get("consulta_descripcion").value,
+                cantidad: get("consulta_cantidad").value,
+                precio: get("consulta_precio").value,
+                foto: foto
+            };
+            cliente.postJson("modifica_articulo",
+                {
+                    articulo: articulo
+                },
+                function (code, result) {
+                    if (code == 200) {
+                        Swal.fire('Éxito', 'Operación realizada con éxito', 'success');
+                    } else {
+                        Swal.fire('Error', JSON.stringify(result), 'error');
+                    }
+                });
+        }
+        function limpia_borra() {
+            get("borra_articulo").value = "";
+        }
+        function borra() {
+            var client = new WSClient(URL);
+            client.postJson("borra_articulo",
+                {
+                    descripcion: get("borra_articulo").value
+                },
+                function (code, result) {
+                    if (code == 200) {
+                        Swal.fire('Éxito', 'Operación realizada con éxito', 'success');
+                    } else {
+                        Swal.fire('Error', JSON.stringify(result), 'error');
+                    }
+                });
+        }
+    </script>
+    <style>
+        .main{
+				margin: auto;
+				padding-left: 10%;
+				padding-right: 10%;
+				padding-top: 20px;
+				padding-bottom: 20px;
+				background: url('newFondo.webp') no-repeat center center fixed;
+				background-size: cover;
+				-webkit-backdrop-filter: blur(5px);
+				box-shadow: rgba(6, 24, 44, 0.4) 0px 0px 0px 2px, rgba(6, 24, 44, 0.65) 0px 4px 6px -1px, rgba(255, 255, 255, 0.08) 0px 1px 0px inset;
+				backdrop-filter: blur(47px);
+				border: 7.5px solid rgba(2, 20, 48, 0.3);
+				border-radius: 20px;
+			}
+        *{
+            font-family: 'Lucida Sans', 'Lucida Sans Regular', 'Lucida Grande', 'Lucida Sans Unicode', Geneva, Verdana, sans-serif;
+            color: antiquewhite;
+        }
+        body {
+            text-align: center; /* Centra el texto de todos los elementos */
+        }
+
+        #menu, #alta_articulo, #consulta_articulo, #borra_usuario, #consulta_carrito {
+            margin-top: 20px;
+        }
+
+        table {
+            margin: 20px auto; /* Centra la tabla */
+            width: 100%; /* Opcional: para que la tabla ocupe el ancho del contenedor */
+        }
+
+        input, button {
+            margin-top: 10px;
+            width: 50%; /* Ajusta el ancho de los inputs y botones */
+        }
+        .button-49 {
+				background-color: rgb(115, 185, 254);
+				border-radius: 100px;
+				box-shadow: rgba(44, 175, 187, 0.2) 0 -25px 18px -14px inset,rgba(44, 175, 187, .15) 0 1px 2px,rgba(44, 175, 187, .15) 0 2px 4px,rgba(44, 175, 187, .15) 0 4px 8px,rgba(44, 175, 187, .15) 0 8px 16px,rgba(44, 175, 187, .15) 0 16px 32px;
+				color: rgb(0, 16, 32);
+				cursor: pointer;
+				display: inline-block;
+				font-family: CerebriSans-Regular,-apple-system,system-ui,Roboto,sans-serif;
+				padding: 7px 10px;
+				text-align: center;
+				text-decoration: none;
+				transition: all 250ms;
+				font-weight: bolder;
+				border: 0;
+				font-size: 16px;
+				user-select: none;
+				margin-bottom: 10px;
+				-webkit-user-select: none;
+				touch-action: manipulation;
+			}
+
+        .button-49:hover {
+            box-shadow: rgba(44, 61, 187, 0.35) 0 -25px 18px -14px inset,rgba(44, 61, 187, 0.25) 0 1px 2px,rgba(44, 61, 187, 0.25) 0 2px 4px,rgba(44, 61, 187, 0.25) 0 8px 16px,rgba(44, 61, 187, 0.35) 0 16px 32px;
+            transform: scale(1.05) rotate(-2deg);
+        }
+        body{
+				background-color: rgb(58, 58, 190);
+				border: 12px;
+				border-color: rgba(128, 128, 128, 0);
+				padding-top: 20px;
+				padding-bottom: 20px;
+				align-items: center;
+				display: flex;
+				background: url('fondo2.jpg') no-repeat center center fixed;
+				background-size: cover;
+			}
+            .inp{
+				height:28px;
+				width: 250px;
+				border-radius: 7px;
+				margin-bottom: 10px;
+				box-shadow: rgba(50, 50, 93, 0.25) 0px 10px 20px -12px inset, rgba(0, 0, 0, 0.3) 0px 6px 12px -6px inset;
+				padding-left: 10px;
+				padding-right: 10px;
+				font-size: 15px;
+				overflow-wrap: break-word;
+			}
+			input{
+				color: black;
+			}
+    </style>
+</head>
+	<body>
+		<div style="width:450px;margin:auto" class="main">
+			<div id="alta_articulo" style="display:none">
+				<h2 style="text-align:center">Alta de articulo</h2>
+				Descripcion *<br>
+				<input class="inp" type="email" id="alta_descripcion" value="" style="width:250px" /><br>
+				Cantidad *<br>
+				<input class="inp" type="text" id="alta_cantidad" value="" style="width:250px" /><br>
+				Precio *<br>
+				<input class="inp" type="text" id="alta_precio" value="" style="width:250px" /><br>
+				<br>
+				<br>
+				<img id="alta_imagen" width="100px" src="/api/Get?nombre=/producto-sin-imagen.jpg"></img><br>
+				<input class="inp" type="file" onchange="readSingleFile(files,get('alta_imagen'))" multiple="false" accept="image/*" /><br>
+				<br>
+				<button class="button-49" type="button" onclick="alta()" style="width:250px;height:40px">Agregar articulo</button></br>
+				<button class="button-49" type="button" onclick="limpia_alta()" style="width:250px;height:40px">Limpiar pantalla</button></br>
+				<button class="button-49" type="button" onclick="oculta_pantalla('alta_articulo')" style="width:250px;height:40px">Regresar</button></br>
+			</div>
+
+			<div id="consulta_carrito" style="display:none">
+				<div id="encabezado_consulta_carrito">
+					<h2 style="text-align:center">Consulta carrito</h2>
+					Presiona para ver<br>
+					<button class="button-49" type="button" onclick="consulta_carrito()" style="width:250px;height:40px">Ver carrito</button></br>
+				</div>
+				<div id="resultados_consulta_carrito">
+					<!-- Aquí se mostrarán los resultados de la consulta -->
+				</div>
+				<button class="button-49" type="button" onclick="cierra_pantalla_consulta_carrito()" style="width:250px;height:40px">Regresar</button></br>
+				<button class="button-49" type="button" onclick="elimina_carrito()" style="width:250px;height:40px">Eliminar carrito</button></br>
+			</div>
+
+			<div id="consulta_articulo" style="display:none">
+				<div id="encabezado_consulta">
+					<h2 style="text-align:center">Consulta articulo</h2>
+					Descripcion *<br>
+					<input class="inp" type="text" id="consulta_descripcion" value="" style="width:250px" /><br>
+					<button class="button-49" type="button" onclick="consulta()" style="width:250px;height:40px">Buscar articulo</button></br>
+				</div>
+				<div id="resultados_consulta">
+					<!-- Aquí se mostrarán los resultados de la consulta -->
+				</div>
+				<button class="button-49" type="button" onclick="cierra_pantalla_consulta2('consulta_carrito');" style="width:250px;height:40px">Consulta carrito</button></br>
+				<button class="button-49" type="button" onclick="cierra_pantalla_consulta()" style="width:250px;height:40px">Regresar</button></br>
+			</div>
+
+			<div id="borra_usuario" style="display:none">
+				<h2 style="text-align:center">Borra usuario</h2>
+				Descripcion *<br>
+				<input class="inp" type="email" id="borra_articulo" value="" style="width:250px" /><br><br>
+				<button class="button-49" type="button" onclick="borra()" style="width:250px;height:40px">Borrar usuario</button></br>
+				<button class="button-49" type="button" onclick="oculta_pantalla('borra_usuario')" style="width:250px;height:40px">Regresar</button></br>
+			</div>
+
+			<div id="menu">
+                <h2 style="text-align:center">Tienda épica</h2>
+				<button class="button-49" type="button" onclick="limpia_alta();muestra_pantalla('alta_articulo')" style="width:250px;height:40px">Nuevo articulo</button></br>
+				<button class="button-49" type="button" onclick="consulta();muestra_pantalla('consulta_articulo')" style="width:250px;height:40px">Comprar articulo</button></br>
+				<button class="button-49" type="button" onclick="consulta_carrito();muestra_pantalla('consulta_carrito')" style="width:250px;height:40px">Ver carrito</button></br>
+
+			</div>
+		</div>
+	</body>
+</html>
